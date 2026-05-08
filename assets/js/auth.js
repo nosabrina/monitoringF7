@@ -1,0 +1,538 @@
+
+(function(){
+
+    /* ========================= */
+    /* CONFIGURATION             */
+    /* ========================= */
+  
+    const AUTH_SESSION_KEY = 'monitoring_sdis_auth_session_v1';
+    const AUTH_PROFILE_KEY = 'monitoring_sdis_auth_profile_v1';
+    const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+  
+    /* ========================================================= */
+    /* Le hash temporaire DOIT venir des variables d'environnement */
+    /* ========================================================= */
+  
+    const TEMP_HASH_HEX =
+      (typeof process !== 'undefined' && process.env?.VITE_TEMP_PASSWORD_HASH) ||
+      (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_TEMP_PASSWORD_HASH) ||
+      (window.MonitoringConfig && window.MonitoringConfig.temporaryPasswordHashHex) ||
+      '';
+  
+    const enc = new TextEncoder();
+  
+    /* ========================= */
+    /* VALIDATION CONFIGURATION  */
+    /* ========================= */
+  
+    if (!TEMP_HASH_HEX && window.location.hostname !== 'localhost') {
+  
+      console.error(
+        '❌ ERREUR CONFIGURATION : VITE_TEMP_PASSWORD_HASH non défini.'
+      );
+  
+      document.addEventListener('DOMContentLoaded', () => {
+  
+        const msg = document.getElementById('authMessage');
+  
+        if (msg) {
+          msg.textContent =
+            '⚠️ Erreur configuration authentification. Contacter l’administrateur.';
+          msg.classList.add('error');
+        }
+  
+      });
+  
+    }
+  
+    /* ========================= */
+    /* OUTILS                    */
+    /* ========================= */
+  
+    function toHex(buffer){
+      return Array
+        .from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2,'0'))
+        .join('');
+    }
+  
+    async function sha256Hex(value){
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        enc.encode(String(value))
+      );
+      return toHex(digest);
+    }
+  
+    function getProfile(){
+      try {
+        return JSON.parse(
+          localStorage.getItem(AUTH_PROFILE_KEY) || 'null'
+        );
+      } catch {
+        return null;
+      }
+    }
+  
+    function setProfile(profile){
+      localStorage.setItem(
+        AUTH_PROFILE_KEY,
+        JSON.stringify(profile)
+      );
+    }
+  
+    function setMessage(text, type){
+  
+      const el = document.getElementById('authMessage');
+  
+      if(!el) return;
+  
+      el.textContent = text;
+  
+      el.classList.remove('error','ok');
+  
+      if(type){
+        el.classList.add(type);
+      }
+  
+    }
+  
+    /* ========================= */
+    /* SESSION                   */
+    /* ========================= */
+  
+    function readSession(){
+  
+      const raw = sessionStorage.getItem(AUTH_SESSION_KEY);
+  
+      if(!raw) return null;
+  
+      /* Compatibilité anciennes versions */
+  
+      if(raw === '1' || raw === 'true'){
+        return {
+          active: true,
+          legacy: true
+        };
+      }
+  
+      try {
+  
+        const parsed = JSON.parse(raw);
+  
+        if(!(parsed && typeof parsed === 'object')){
+          return null;
+        }
+  
+        /* Expiration session */
+  
+        if(
+          parsed.startedAt &&
+          Date.now() - Date.parse(parsed.startedAt) > SESSION_MAX_AGE_MS
+        ){
+          clearSession();
+          return null;
+        }
+  
+        return parsed;
+  
+      } catch {
+  
+        sessionStorage.removeItem(AUTH_SESSION_KEY);
+  
+        return null;
+  
+      }
+  
+    }
+  
+    function writeSession(profile){
+  
+      sessionStorage.setItem(
+        AUTH_SESSION_KEY,
+        JSON.stringify({
+          active: true,
+          mode: 'local-browser-only',
+          nip: profile?.nip || '',
+          startedAt: new Date().toISOString(),
+          version:
+            (window.MonitoringConfig &&
+             window.MonitoringConfig.version) || 'v58'
+        })
+      );
+  
+    }
+  
+    function clearSession(){
+  
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+  
+      sessionStorage.removeItem('monitoring_f7_admin_lock_v1');
+  
+      document.body?.classList.add('auth-locked');
+  
+    }
+  
+    /* ========================= */
+    /* UI                        */
+    /* ========================= */
+  
+    function syncAuthUI(active){
+  
+      document.body?.classList.toggle(
+        'auth-locked',
+        !active
+      );
+  
+      document.body?.classList.toggle(
+        'auth-active',
+        !!active
+      );
+  
+    }
+  
+    function unlock(profile){
+  
+      syncAuthUI(true);
+  
+      const overlay = document.getElementById('authOverlay');
+  
+      if(overlay){
+        overlay.classList.add('auth-hidden');
+      }
+  
+      writeSession(profile || getProfile() || {});
+  
+    }
+  
+    function showChangeBlock(){
+  
+      const block =
+        document.getElementById('authChangeBlock');
+  
+      if(block){
+        block.hidden = false;
+      }
+  
+    }
+  
+    /* ========================= */
+    /* LOGIN                     */
+    /* ========================= */
+  
+    async function onSubmit(e){
+  
+      e.preventDefault();
+  
+      const nip =
+        (document.getElementById('authNip')?.value || '')
+        .trim();
+  
+      const password =
+        document.getElementById('authPassword')?.value || '';
+  
+      const newPassword =
+        document.getElementById('authNewPassword')?.value || '';
+  
+      const confirm =
+        document.getElementById('authNewPasswordConfirm')?.value || '';
+  
+      if(!nip){
+  
+        setMessage(
+          'NIP ECA obligatoire.',
+          'error'
+        );
+  
+        return;
+  
+      }
+  
+      const profile = getProfile();
+  
+      const hash = await sha256Hex(password);
+  
+      /* ==================================== */
+      /* PREMIÈRE CONNEXION                   */
+      /* ==================================== */
+  
+      if(!profile){
+  
+        if(hash !== TEMP_HASH_HEX){
+  
+          window.MonitoringAuditLog?.logWarning(
+            'login-local-failed',
+            'Échec login local.',
+            { reason:'temporary-password' }
+          );
+  
+          setMessage(
+            'Mot de passe temporaire incorrect.',
+            'error'
+          );
+  
+          return;
+  
+        }
+  
+        showChangeBlock();
+  
+        if(!newPassword || !confirm){
+  
+          setMessage(
+            'Première connexion : remplace le mot de passe temporaire.',
+            'error'
+          );
+  
+          return;
+  
+        }
+  
+        if(newPassword !== confirm){
+  
+          setMessage(
+            'La confirmation du nouveau mot de passe ne correspond pas.',
+            'error'
+          );
+  
+          return;
+  
+        }
+  
+        if(
+          newPassword === 'abcd' ||
+          newPassword.length < 6
+        ){
+  
+          setMessage(
+            'Choisis un mot de passe différent de abcd, minimum 6 caractères.',
+            'error'
+          );
+  
+          return;
+  
+        }
+  
+        setProfile({
+          nip,
+          passwordHash: await sha256Hex(newPassword),
+          createdAt: new Date().toISOString(),
+          temporaryPasswordReplaced: true
+        });
+  
+        window.MonitoringAuditLog?.logAction(
+          'login-local',
+          'Première connexion locale validée.',
+          {}
+        );
+  
+        setMessage(
+          'Mot de passe remplacé. Accès autorisé.',
+          'ok'
+        );
+  
+        unlock({ nip });
+  
+        return;
+  
+      }
+  
+      /* ==================================== */
+      /* LOGIN STANDARD                       */
+      /* ==================================== */
+  
+      if(
+        !profile ||
+        typeof profile !== 'object' ||
+        !profile.nip ||
+        !profile.passwordHash ||
+        profile.nip !== nip ||
+        profile.passwordHash !== hash
+      ){
+  
+        window.MonitoringAuditLog?.logWarning(
+          'login-local-failed',
+          'Échec login local.',
+          { reason:'credentials' }
+        );
+  
+        setMessage(
+          'NIP ECA ou mot de passe incorrect.',
+          'error'
+        );
+  
+        return;
+  
+      }
+  
+      window.MonitoringAuditLog?.logAction(
+        'login-local',
+        'Login local validé.',
+        {}
+      );
+  
+      unlock(profile);
+  
+    }
+  
+    /* ========================= */
+    /* INITIALISATION            */
+    /* ========================= */
+  
+    document.addEventListener(
+      'DOMContentLoaded',
+      function(){
+  
+        syncAuthUI(false);
+  
+        const overlay =
+          document.getElementById('authOverlay');
+  
+        try {
+  
+          const session = readSession();
+  
+          if(session && session.active === true){
+  
+            /* Migration anciennes sessions */
+  
+            if(session.legacy){
+              writeSession(getProfile() || {});
+            }
+  
+            if(overlay){
+              overlay.classList.add('auth-hidden');
+            }
+  
+            syncAuthUI(true);
+  
+            return;
+  
+          }
+  
+        } catch {
+  
+          clearSession();
+  
+        }
+  
+        const profile = getProfile();
+  
+        if(!profile){
+          showChangeBlock();
+        }
+  
+        const form =
+          document.getElementById('authForm');
+  
+        if(form){
+          form.addEventListener(
+            'submit',
+            onSubmit
+          );
+        }
+  
+      }
+    );
+  
+  })();
+  
+  /* ========================================================= */
+  /* API AUTH                                                   */
+  /* ========================================================= */
+  
+  window.MonitoringAuthService = Object.freeze({
+  
+    getMode(){
+  
+      return (
+        window.MonitoringBackendConfig?.current?.authMode ||
+        'local'
+      );
+  
+    },
+  
+    isBackendAuthPrepared(){
+  
+      return (
+        this.getMode() === 'backend' &&
+        window.MonitoringApiClient?.isBackendEnabled?.() === true
+      );
+  
+    },
+  
+    getStatus(){
+  
+      return Object.freeze({
+  
+        authMode: this.getMode(),
+  
+        localSessionActive:
+          !!this.readSession(),
+  
+        backendAuthActive: false,
+  
+        message:
+          this.getMode() === 'local'
+            ? 'Session locale navigateur conservée.'
+            : 'Auth backend préparée, non active.'
+  
+      });
+  
+    },
+  
+    readSession(){
+  
+      try {
+  
+        return JSON.parse(
+          sessionStorage.getItem(
+            'monitoring_sdis_auth_session_v1'
+          ) || 'null'
+        );
+  
+      } catch {
+  
+        return null;
+  
+      }
+  
+    },
+  
+    logout(){
+  
+      window.MonitoringAuditLog?.logAction(
+        'logout-local',
+        'Déconnexion locale demandée.',
+        {}
+      );
+  
+      sessionStorage.removeItem(
+        'monitoring_sdis_auth_session_v1'
+      );
+  
+      sessionStorage.removeItem(
+        'monitoring_f7_admin_lock_v1'
+      );
+  
+      location.reload();
+  
+    }
+  
+  });
+  
+  /* ========================================================= */
+  /* COMPATIBILITÉ                                              */
+  /* ========================================================= */
+  
+  window.MonitoringSessionManager = Object.freeze({
+  
+    read(){
+      return window.MonitoringAuthService.readSession();
+    },
+  
+    logout(){
+      return window.MonitoringAuthService.logout();
+    }
+  
+  });
