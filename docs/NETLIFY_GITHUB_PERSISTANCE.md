@@ -23,7 +23,7 @@ L’application reste une application statique offline-first compatible Netlify 
 
 ## Sécurité Admin locale
 
-Le menu Admin utilise un code local hashé dans le navigateur. Le code initial est `1234` et doit être changé. Cette protection évite les manipulations accidentelles sur un poste partagé, mais ne remplace pas une authentification serveur réelle.
+Le menu Admin utilise un code local hashé dans le navigateur. Le code initial est `abcdss` et doit être changé. Cette protection évite les manipulations accidentelles sur un poste partagé, mais ne remplace pas une authentification serveur réelle.
 
 ## Migrations
 

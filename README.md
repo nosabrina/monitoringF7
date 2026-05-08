@@ -8,7 +8,7 @@ Cette livraison découpe le fichier HTML monolithique v47 en une arborescence ex
 2. Ouvrir `index.html` dans un navigateur moderne.
 3. Première connexion :
    - NIP ECA : saisir le NIP utilisateur
-   - Mot de passe temporaire : `1234`
+   - Mot de passe temporaire : `abcd`
    - Remplacer immédiatement ce mot de passe dans les champs affichés.
 
 ## Sécurité du login
