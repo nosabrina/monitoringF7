@@ -1,4 +1,4 @@
-/* Monitoring F7 v58 — configuration backend optionnel futur.
+/* Monitoring F7 v58.3 — configuration backend optionnel futur.
    Par défaut, toute l'application reste locale/offline-first. */
 (function(){
   'use strict';

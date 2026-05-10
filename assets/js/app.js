@@ -1,4 +1,4 @@
-/* Application métier v58 — cœur historique v47, stabilisation pré-release sans changement des règles métier. */
+/* Application métier v58.3 — cœur historique v47, stabilisation pré-release sans changement des règles métier. */
 
     /* ========================================================= */
     /* TABLE DES MATIÈRES SCRIPT                                 */
@@ -28,7 +28,7 @@
     const STORAGE_KEY_IMPORTED_EVENTS = "monitoring_exercices_sdis_imported_events_v1";
     const STORAGE_KEY_OBJECTIVES = "monitoring_exercices_sdis_objectifs_v1";
 
-    const APP_VERSION = (window.MonitoringConfig && window.MonitoringConfig.version) || "v58";
+    const APP_VERSION = (window.MonitoringConfig && window.MonitoringConfig.version) || "v58.3";
     const MAX_IMPORT_JSON_BYTES = 8 * 1024 * 1024;
     const MAX_IMPORT_CSV_BYTES = 5 * 1024 * 1024;
 
@@ -5789,12 +5789,20 @@ function getDisplayRows() {
       });
 
       if (els.eventSelect) {
+        els.eventSelect.disabled = false;
+        els.eventSelect.style.pointerEvents = "auto";
+        els.eventSelect.addEventListener("click", () => {
+          if (!Array.isArray(importedEvents) || importedEvents.length === 0) {
+            updateImportedEventInfo("Aucun événement importé disponible. Utilise d’abord le bouton « Importer les événements annuels ».");
+          }
+        });
         els.eventSelect.addEventListener("change", () => {
           const eventId = els.eventSelect.value;
           if (!eventId) {
             clearImportedEventSelection();
             return;
           }
+          window.MonitoringAuditLog?.logAction('select-imported-event', 'Sélection d’un événement importé.', { eventId });
           selectImportedEvent(eventId);
         });
       }
@@ -6048,17 +6056,30 @@ function getDisplayRows() {
       }
 
       if (els.importEventsBtn && els.eventsFileInput) {
+        els.importEventsBtn.disabled = false;
+        els.importEventsBtn.style.pointerEvents = "auto";
+        els.eventsFileInput.disabled = false;
+        els.eventsFileInput.addEventListener("click", () => {
+          window.MonitoringAuditLog?.logAction('import-events-picker-open', 'Sélecteur de fichier événements ouvert.', {});
+        });
         els.importEventsBtn.onclick = () => {
-          els.eventsFileInput.click();
+          window.MonitoringAuditLog?.logAction('import-events-launch', 'Import événement lancé depuis le bouton.', {});
+          try {
+            els.eventsFileInput.click();
+          } catch (error) {
+            window.MonitoringAuditLog?.logError('import-events-picker-error', 'Ouverture du sélecteur de fichier événements impossible.', { error });
+            alert("Import événements impossible : le sélecteur de fichier n’a pas pu être ouvert.");
+          }
         };
 
         els.eventsFileInput.onchange = e => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
+          window.MonitoringAuditLog?.logAction('import-events-file-selected', 'Fichier événements sélectionné.', { name: file.name, size: file.size, type: file.type });
           if (!confirm("Importer les événements depuis ce CSV ?\n\nLes doublons seront ignorés selon les règles existantes.")) { e.target.value = ""; return; }
 
           try { validateImportFile(file, [".csv", ".txt"], MAX_IMPORT_CSV_BYTES); }
-          catch (err) { window.MonitoringAuditLog?.logError('import-csv-error', 'Validation fichier CSV refusée.', { error:err }); setImportStatus("Import CSV impossible : " + err.message, "error"); alert("Import CSV impossible : " + err.message); return; }
+          catch (err) { window.MonitoringAuditLog?.logError('import-events-invalid-file', 'Fichier événements invalide.', { error:err, name:file.name, size:file.size, type:file.type }); setImportStatus("Import CSV impossible : " + err.message, "error"); alert("Fichier événements invalide : " + err.message); e.target.value = ""; return; }
 
           const reader = new FileReader();
           reader.onload = () => {
@@ -6073,11 +6094,11 @@ function getDisplayRows() {
               }
               const fullMessage = result.summary + (details.length ? "\n\n" + details.join("\n\n") : "");
               setImportStatus(fullMessage, "ok");
-              window.MonitoringAuditLog?.logAction('import-csv', 'Import CSV événements effectué.', { added: result.added, duplicates: result.duplicates?.length || 0, ignored: result.ignored?.length || 0 });
+              window.MonitoringAuditLog?.logAction('import-events-success', 'Import événements réussi.', { added: result.added, duplicates: result.duplicates?.length || 0, ignored: result.ignored?.length || 0 });
               alert(fullMessage);
             } catch (error) {
               setImportStatus("Import des événements impossible : " + error.message, "error");
-              window.MonitoringAuditLog?.logError('import-csv-error', 'Erreur import CSV événements.', { error });
+              window.MonitoringAuditLog?.logError('import-events-error', 'Import événements échoué.', { error });
               alert("Import des événements impossible : " + error.message);
             } finally {
               e.target.value = "";
@@ -6660,7 +6681,7 @@ a.sessions.forEach((s, i) => {
         if (window.MonitoringStorage?.initStorage) {
           try {
             const diagnostics = await window.MonitoringStorage.initStorage();
-            console.info("Monitoring F7 stockage v58", diagnostics);
+            console.info("Monitoring F7 stockage v58.3", diagnostics);
             window.MonitoringAuditLog?.logInfo('storage-init', 'StorageService initialisé.', diagnostics || {});
             referencePeriods = loadReferencePeriods();
             selectedReferencePeriodId = referencePeriods[0]?.id || null;

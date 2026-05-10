@@ -1,4 +1,4 @@
-/* Monitoring F7 v58 — service de synchronisation future, inactif par défaut. */
+/* Monitoring F7 v58.3 — service de synchronisation future, inactif par défaut. */
 (function(){
   'use strict';
 
@@ -24,7 +24,7 @@
       lastSyncAttemptAt: null,
       lastSyncSuccessAt: null,
       lastConflictAt: null,
-      message: 'Synchronisation inactive en v58.'
+      message: 'Synchronisation inactive en v58.3.'
     }, saved, { syncEnabled: isSyncEnabled(), queueLength: getQueue().length }));
   }
   function enqueue(type, payload){
@@ -42,7 +42,7 @@
       return Object.freeze(status);
     }
     status.status = 'prepared-not-implemented';
-    status.message = 'Synchronisation future préparée, non implémentée en v58.';
+    status.message = 'Synchronisation future préparée, non implémentée en v58.3.';
     writeJson(STATUS_KEY, status);
     return Object.freeze(status);
   }

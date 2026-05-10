@@ -1,11 +1,11 @@
-/* Monitoring F7 v58 — helpers export JSON centralisés. */
+/* Monitoring F7 v58.3 — helpers export JSON centralisés. */
 (function(){
   'use strict';
   function createExportMeta(extra = {}){
     return Object.assign({
       type: 'MonitoringF7Export',
       app: 'Monitoring F7',
-      version: (window.MonitoringConfig && window.MonitoringConfig.version) || 'v58',
+      version: (window.MonitoringConfig && window.MonitoringConfig.version) || 'v58.3',
       exportedAt: new Date().toISOString()
     }, extra || {});
   }

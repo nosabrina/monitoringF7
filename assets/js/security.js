@@ -1,4 +1,4 @@
-/* Monitoring F7 v58 — sécurité client-only réaliste.
+/* Monitoring F7 v58.3 — sécurité client-only réaliste.
    Ces helpers réduisent les erreurs XSS/injections côté navigateur, sans prétendre fournir une sécurité institutionnelle forte. */
 (function(){
   'use strict';
@@ -71,7 +71,7 @@
   }
 
   function logSecurity(type, detail, data){
-    const payload = { version: window.MonitoringConfig?.version || 'v58', type, detail, at: new Date().toISOString(), data };
+    const payload = { version: window.MonitoringConfig?.version || 'v58.3', type, detail, at: new Date().toISOString(), data };
     console.warn('[Monitoring F7 sécurité]', payload);
     if(type === 'js-error' || type === 'promise-rejection') window.MonitoringAuditLog?.logError(type, detail, data || {});
     else window.MonitoringAuditLog?.logWarning(type, detail, data || {});

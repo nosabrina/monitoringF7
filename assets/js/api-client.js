@@ -1,4 +1,4 @@
-/* Monitoring F7 v58 — façade API préparatoire, inactive par défaut. */
+/* Monitoring F7 v58.3 — façade API préparatoire, inactive par défaut. */
 (function(){
   'use strict';
 
@@ -27,7 +27,7 @@
       localMode: true,
       method,
       path: String(path || ''),
-      message: 'Backend désactivé en v58 : aucune requête distante effectuée.'
+      message: 'Backend désactivé en v58.3 : aucune requête distante effectuée.'
     }));
   }
 
